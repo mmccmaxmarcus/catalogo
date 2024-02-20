@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+        "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="http://xmlns.jcp.org/jsf/html"
+      xmlns:p="http://primefaces.org/ui"
+      xmlns:ui="http://xmlns.jcp.org/jsf/facelets"
+      xmlns:f="http://xmlns.jcp.org/jsf/core">
+<h:head>
+    <h:outputStylesheet library="webjars" name="font-awesome/6.4.0/css/all.min-jsf.css"/>
+    <h:outputStylesheet library="webjars" name="font-awesome/6.4.0/css/v4-shims.min-jsf.css"/>
+    <script type="application/javascript">
+        //<![CDATA[
+        function start() {
+            PF('statusDialog').show();
+        }
+
+        function stop() {
+            PF('statusDialog').hide();
+        }
+
+        //]]>
+    </script>
+</h:head>
+
+<h:body>
+    <p:ajaxStatus onstart="PF('statusDialog').show();" oncomplete="PF('statusDialog').hide();"/>
+    <p:dialog modal="true" widgetVar="statusDialog" draggable="false" closable="false"
+              resizable="false">
+        <i class="pi pi-spinner pi-spin" style="font-size:3rem"></i>
+    </p:dialog>
+    <p:panelGrid id="pnlGeral" columns="1" layout="grid">
+        <h:form id="frmUpload" enctype="multipart/form-data">
+            <p:fileUpload mode="advanced"
+                          skinSimple="true"
+                          process="@this"
+                          label="Escolher"
+                          cancelLabel="Cancelar"
+                          listener="#{exportarCatalogoBean.processa}"
+                          allowTypes="/(\.|\/)(xls|xlsx|)$/"
+                          invalidFileMessage="Tipo de arquivo inválido, aceita somente xls e xlsx"/>
+            <p:media id="idMedia" value="#{exportarCatalogoBean.file}"  player="pdf" width="500" height="900"/>
+        </h:form>
+    </p:panelGrid>
+</h:body>
+</html>
