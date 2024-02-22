@@ -3,8 +3,18 @@ package br.com.controller;
 
 import br.com.constante.TipoArquivo;
 import br.com.model.Produto;
-import com.itextpdf.text.*;
-import com.itextpdf.text.pdf.*;
+import com.itextpdf.text.BadElementException;
+import com.itextpdf.text.Chunk;
+import com.itextpdf.text.Document;
+import com.itextpdf.text.DocumentException;
+import com.itextpdf.text.Element;
+import com.itextpdf.text.Font;
+import com.itextpdf.text.FontFactory;
+import com.itextpdf.text.Image;
+import com.itextpdf.text.Paragraph;
+import com.itextpdf.text.pdf.PdfPCell;
+import com.itextpdf.text.pdf.PdfPTable;
+import com.itextpdf.text.pdf.PdfWriter;
 import lombok.Getter;
 import lombok.Setter;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
@@ -20,8 +30,8 @@ import org.primefaces.event.FileUploadEvent;
 import org.primefaces.model.DefaultStreamedContent;
 import org.primefaces.model.StreamedContent;
 
-import javax.faces.view.ViewScoped;
-import javax.inject.Named;
+import javax.enterprise.context.SessionScoped;
+import javax.enterprise.inject.Model;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -29,21 +39,32 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.NumberFormat;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
+
+import static br.com.constante.ColunaProduto.CODIGO;
+import static br.com.constante.ColunaProduto.DESCRICAO;
+import static br.com.constante.ColunaProduto.PRECO;
+import static br.com.constante.ColunaProduto.QTDE;
 
 @Getter
 @Setter
-@Named
-@ViewScoped
+@Model
+@SessionScoped
 public class ExportarCatalogoBean implements Serializable {
-    List<Produto> produtos = new LinkedList<>();
-    Map<Integer, byte[]> imagemProdutos = new LinkedHashMap<>();
-    private StreamedContent file;
+    private List<Produto> produtos = new LinkedList<>();
+    private List<Produto> produtosFiltrados = new ArrayList<>();
+    private Map<Integer, byte[]> imagemProdutos = new LinkedHashMap<>();
+
+    private String busca;
+
+
     public void processa(FileUploadEvent event) {
         this.produtos = new LinkedList<>();
         this.imagemProdutos = new LinkedHashMap<>();
@@ -60,30 +81,40 @@ public class ExportarCatalogoBean implements Serializable {
 
             XSSFDrawing drawing = (XSSFDrawing) sheet.createDrawingPatriarch();
             for (XSSFShape shape : drawing.getShapes()) {
-                if (shape instanceof XSSFPicture){
+                if (shape instanceof XSSFPicture) {
                     XSSFPicture xssfPicture = ((XSSFPicture) shape);
-                    XSSFClientAnchor anchor = ((XSSFPicture)shape).getClientAnchor();
+                    XSSFClientAnchor anchor = ((XSSFPicture) shape).getClientAnchor();
                     imagemProdutos.put(anchor.getRow1(), xssfPicture.getPictureData().getData());
 
                 }
             }
 
             for (int i = row.getRowNum(); i <= sheet.getLastRowNum() - 1; i++) {
-               byte[] bytesImagem =  imagemProdutos.get(i);
-                        produtos.add(new Produto(
-                                 bytesImagem
-                                , sheet.getRow(i).getCell(3).getStringCellValue()
-                                , sheet.getRow(i).getCell(2).getStringCellValue()
-                                , sheet.getRow(i).getCell(25).getNumericCellValue()
-                        ));
+                byte[] bytesImagem = imagemProdutos.get(i);
+                produtos.add(new Produto(String.valueOf(i),
+                        bytesImagem
+                        , sheet.getRow(i).getCell(CODIGO).getStringCellValue()
+                        , sheet.getRow(i).getCell(DESCRICAO).getStringCellValue()
+                        , sheet.getRow(i).getCell(PRECO).getNumericCellValue()
+                        , sheet.getRow(i).getCell(QTDE).getStringCellValue()
+                ));
             }
-            exportar();
+            this.produtosFiltrados.addAll(produtos);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public void exportar() {
+    public void onChangeProduto() {
+        if (Objects.isNull(getBusca()) || getBusca().isEmpty()) {
+            this.produtosFiltrados = new ArrayList<>(getProdutos());
+        } else {
+            this.produtosFiltrados = getProdutos().stream().filter(produto -> produto.getDescricao().toUpperCase().trim().contains(getBusca().toUpperCase().trim())
+            || produto.getCodigo().toUpperCase().trim().contains(getBusca().toUpperCase().trim())).collect(Collectors.toList());
+        }
+    }
+
+    public StreamedContent exportar() {
         try {
             ByteArrayOutputStream boas = new ByteArrayOutputStream();
             Document document = new Document();
@@ -98,13 +129,14 @@ public class ExportarCatalogoBean implements Serializable {
             produtos.setSpacingBefore(20);
             produtos.setSpacingAfter(20);
 
-           getProdutos().forEach(produto -> {
+            getProdutos().forEach(produto -> {
                 PdfPCell celulaProduto = new PdfPCell();
 
                 String codigo = produto.getCodigo();
-                byte [] imagem = produto.getImagem();
+                byte[] imagem = produto.getImagem();
                 String descricao = produto.getDescricao();
                 BigDecimal preco = produto.getPreco();
+                String qtde = produto.getQtde();
 
                 if (Objects.nonNull(imagem)) {
                     try {
@@ -117,6 +149,7 @@ public class ExportarCatalogoBean implements Serializable {
                     }
                 } else {
                     Paragraph vazioParagraph = new Paragraph("Sem imagem", new Font(Font.FontFamily.HELVETICA, 12));
+                    vazioParagraph.setSpacingAfter(80);
                     vazioParagraph.setAlignment(Element.ALIGN_CENTER);
                     celulaProduto.addElement(vazioParagraph);
                 }
@@ -129,26 +162,32 @@ public class ExportarCatalogoBean implements Serializable {
                 descricaoParagraph.setAlignment(Element.ALIGN_CENTER);
                 celulaProduto.addElement(descricaoParagraph);
 
+                Paragraph qtdeParagraph = new Paragraph(qtde, new Font(Font.FontFamily.HELVETICA, 12));
+                qtdeParagraph.setAlignment(Element.ALIGN_CENTER);
+                celulaProduto.addElement(qtdeParagraph);
+
                 NumberFormat format = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
-                Paragraph precoParagraph = new Paragraph(format.format(preco.setScale(2, RoundingMode.HALF_UP)), new Font(Font.FontFamily.HELVETICA, 12));
+
+
+                Paragraph precoParagraph = new Paragraph(format.format(preco.setScale(2, RoundingMode.HALF_UP)), new Font(FontFactory.getFont(FontFactory.HELVETICA_BOLD, 12)));
                 precoParagraph.setAlignment(Element.ALIGN_CENTER);
                 celulaProduto.addElement(precoParagraph);
 
+                celulaProduto.setVerticalAlignment(Element.ALIGN_BOTTOM);
+                celulaProduto.setHorizontalAlignment(Element.ALIGN_BOTTOM);
                 produtos.addCell(celulaProduto);
-           });
+            });
 
             document.add(produtos);
             document.close();
 
-            this.file = DefaultStreamedContent
+            return DefaultStreamedContent
                     .builder()
                     .contentType("application/pdf")
                     .name("catalogo.pdf")
-                    .contentLength(boas.size())
-                    .contentEncoding("UTF-8")
                     .stream(() -> new ByteArrayInputStream(boas.toByteArray()))
                     .build();
-        }catch (DocumentException e) {
+        } catch (DocumentException e) {
             throw new RuntimeException(e);
         }
     }

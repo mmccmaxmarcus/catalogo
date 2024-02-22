@@ -9,22 +9,64 @@
 <h:head>
     <h:outputStylesheet library="webjars" name="font-awesome/6.4.0/css/all.min-jsf.css"/>
     <h:outputStylesheet library="webjars" name="font-awesome/6.4.0/css/v4-shims.min-jsf.css"/>
-    <script type="application/javascript">
-        //<![CDATA[
-        function start() {
+    <link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css"/>
+    <script type="text/javascript">
+        function showStatus() {
             PF('statusDialog').show();
         }
 
-        function stop() {
+        function hideStatus() {
             PF('statusDialog').hide();
         }
-
-        //]]>
     </script>
+
+    <style type="text/css">
+        .product .product-list-item {
+            display: -ms-flexbox;
+            display: flex;
+            -ms-flex-align: center;
+            align-items: center;
+            padding: 1rem;
+        }
+
+        .product .product-list-item img {
+            width: 150px;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, .16), 0 3px 6px rgba(0, 0, 0, .23);
+            margin-right: 2rem;
+        }
+
+        .product .product-list-item .product-list-detail {
+            flex: 1 1 0;
+            -ms-flex: 1 1 0;
+        }
+
+        .product .product-list-item .product-list-action {
+            display: -ms-flexbox;
+            display: flex;
+            -ms-flex-direction: column;
+            flex-direction: column;
+        }
+
+        .product .product-name {
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .product .product-description {
+            margin: 0 0 1rem 0;
+        }
+
+        .product .product-list-item .product-price {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: .5rem;
+            align-self: flex-end;
+        }
+    </style>
 </h:head>
 
 <h:body>
-    <p:ajaxStatus onstart="PF('statusDialog').show();" oncomplete="PF('statusDialog').hide();"/>
+
     <p:dialog modal="true" widgetVar="statusDialog" draggable="false" closable="false"
               resizable="false">
         <i class="pi pi-spinner pi-spin" style="font-size:3rem"></i>
@@ -37,10 +79,61 @@
                           label="Escolher"
                           cancelLabel="Cancelar"
                           listener="#{exportarCatalogoBean.processa}"
+                          update=":tblform"
+                          onstart="PF('statusDialog').show();"
+                          oncomplete="PF('statusDialog').hide();"
                           allowTypes="/(\.|\/)(xls|xlsx|)$/"
                           invalidFileMessage="Tipo de arquivo inválido, aceita somente xls e xlsx"/>
-            <p:media id="idMedia" value="#{exportarCatalogoBean.file}"  player="pdf" width="500" height="900"/>
         </h:form>
     </p:panelGrid>
+
+    <div class="card product">
+        <h:form id="tblform">
+            <p:remoteCommand name="updateTable" update="tblProduto" partialSubmit="true" />
+            <p:dataScroller id="tblProduto" value="#{exportarCatalogoBean.produtosFiltrados}" var="produto" chunkSize="10"
+                            scrollHeight="500" >
+                <f:facet name="header">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <p:outputLabel value="Catálogo de Produtos"/>
+                        <div>
+                            <span class="ui-input-icon-left" style="margin-right: 10px;">
+                                <i class="pi pi-search"/>
+                                <p:inputText placeholder="Buscar produto" disabled="#{empty exportarCatalogoBean.produtos}" value="#{exportarCatalogoBean.busca}" >
+                                        <p:ajax event="input"
+                                                listener="#{exportarCatalogoBean.onChangeProduto()}"
+                                                process="@this"
+                                                onstart="PF('statusDialog').show();"
+                                                oncomplete="updateTable(); PF('statusDialog').hide();"/>
+                                </p:inputText>
+                            </span>
+                            <p:commandButton ajax="false"
+                                                 disabled="#{empty exportarCatalogoBean.produtos}"
+                                                 onclick="PrimeFaces.monitorDownload(showStatus, hideStatus)"
+                                                 icon="pi pi-arrow-down" title="Baixar"
+                                                 styleClass="mr-2">
+                                    <p:fileDownload value="#{exportarCatalogoBean.exportar()}"/>
+                            </p:commandButton>
+                        </div>
+                    </div>
+                </f:facet>
+                <div class="product">
+                    <div class="product-list-item p-5">
+                        <p:graphicImage value="#{produto.imagem}" stream="false"/>
+                        <div class="product-list-detail">
+                            <div class="product-name">#{produto.codigo}</div>
+                            <div class="product-description">#{produto.descricao}</div>
+                        </div>
+                        <div class="product-list-action">
+                            <h:outputText value="#{produto.qtde}" />
+                            <h:outputText value="#{produto.preco}" styleClass="product-price">
+                                <f:convertNumber currencySymbol="R$" type="currency"/>
+                            </h:outputText>
+                        </div>
+                    </div>
+                </div>
+            </p:dataScroller>
+        </h:form>
+    </div>
+
 </h:body>
 </html>
